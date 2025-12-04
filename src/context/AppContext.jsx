@@ -81,7 +81,7 @@ export const AppContextProvider = ({ children }) => {
 
   // Fetch User on page load
   const fetchUser = async () => {
-    // setUser(dummyUserData);
+    setUser(dummyUserData);
   };
 
   // Fetch Chats
