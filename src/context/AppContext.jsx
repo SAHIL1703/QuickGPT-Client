@@ -1,71 +1,11 @@
-// import { createContext, useContext, useEffect, useState } from "react";
-// import { useNavigate } from "react-router-dom";
-// import {dummyChats, dummyUserData} from "../assets/assets"
-// const AppContext = createContext();
-
-// //Make a Provider function
-// export const AppContextProvider = ({ children }) => {
-    
-//     const navigate = useNavigate();
-//     const [user , setUser] = useState(null);
-//     const [chats , setChats] = useState([]);
-//     const [selectedChat , setSelectedChat] = useState(null);
-//     const [theme , setTheme] = useState(localStorage.getItem('theme') || "light");
-
-
-//     //Fetch the user when the Component is Reload
-//     const fetchUser = async()=>{
-//         setUser(dummyUserData)
-//     }
-
-//     //This is used to fecth all the Chats of the Users
-//     const fetchUserChats =async()=>{
-//         setChats(dummyChats)
-//         setSelectedChat(dummyChats[0])
-//     }
-
-//     useEffect(()=>{
-//         //If User is Logging 
-//         if(user){
-//             fetchUserChats()
-//         }else{
-//             setChats([])
-//             setSelectedChat(null)
-//         }
-//     },[user])
-
-//     useEffect(()=>{
-//         fetchUser()
-//     },[])
-
-//     //This is the UseEffect of the Changing the Theme
-//     useEffect(()=>{
-//         if(theme =="dark"){
-//             document.documentElement.classList.add('dark')
-//         }else{
-//             document.documentElement.classList.remove('dark')
-//         }
-//         //Save in the local storage
-//         localStorage.setItem("theme" , theme)
-//     },[theme])
-
-
-
-
-//   const value = {
-//     navigate , user , setUser , fetchUser , chats ,setChats , selectedChat ,setSelectedChat,theme , setTheme 
-//   };
-
-//   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
-// };
-// export const useAppContext = () => {
-//   return useContext(AppContext);
-// };
-
 // src/context/AppContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { dummyChats, dummyUserData } from "../assets/assets";
+import axios from "axios";
+import toast from "react-hot-toast";
+
+//Adding the base url to the axios
+axios.defaults.baseURL = import.meta.env.VITE_SERVER_URL;
 
 const AppContext = createContext();
 
@@ -75,19 +15,68 @@ export const AppContextProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
-  const [theme, setTheme] = useState(
-    localStorage.getItem("theme") || "light"
-  );
+  const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
+  const [token, setToken] = useState(localStorage.getItem("token") || null);
+  const [loadingUser , setLoadingUser] = useState(true);
+
+  //Create the Token State
 
   // Fetch User on page load
   const fetchUser = async () => {
-    setUser(dummyUserData);
+    try {
+      const { data } = await axios.get("/api/user/data", {
+        headers: { Authorization: token },
+      });
+      if (data.success) {
+        setUser(data.user);
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }finally{
+      setLoadingUser(false);
+    }
   };
+
+  const createNewChat = async()=>{
+    try {
+      if(!user){
+        return toast('Login To Create A New Chat');
+      }
+      navigate('/');
+      await axios.get('/api/chat/create', {
+        headers : {
+          Authorization : token
+        }
+      })
+      await fetchUserChats();
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
 
   // Fetch Chats
   const fetchUserChats = async () => {
-    setChats(dummyChats);
-    setSelectedChat(dummyChats[0]);
+
+    try {
+      const {data} = await axios.get('/api/chat/get' , {headers : {Authorization : token}});
+      if(data.success){
+        setChats(data.chats);
+
+        //if User dont have the Chats
+        if(data.chats.length === 0){
+          await createNewChat();
+          return fetchUserChats();
+        }else{
+          setSelectedChat(data.chats[0])
+        }
+      }else{
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
   };
 
   // When user changes → load chats OR reset
@@ -102,8 +91,13 @@ export const AppContextProvider = ({ children }) => {
 
   // Load user when app starts
   useEffect(() => {
-    fetchUser();
-  }, []);
+    if(token){
+      fetchUser();
+    }else{
+      setUser(null);
+      setLoadingUser(false);
+    }
+  }, [token]);
 
   // Apply Dark/Light Theme
   useEffect(() => {
@@ -126,11 +120,15 @@ export const AppContextProvider = ({ children }) => {
     setSelectedChat,
     theme,
     setTheme,
+    createNewChat,
+    loadingUser,
+    fetchUserChats,
+    token,
+    setToken,
+    axios
   };
 
-  return (
-    <AppContext.Provider value={value}>{children}</AppContext.Provider>
-  );
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
 export const useAppContext = () => {
